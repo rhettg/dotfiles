@@ -1,0 +1,6 @@
+export EDITOR="vim"
+set -o vi
+
+# Something else from codespaces. What is nvs?
+export NVS_HOME="$HOME/.nvs"
+[ -s "$NVS_HOME/nvs.sh" ] && . "$NVS_HOME/nvs.sh"
