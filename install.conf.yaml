@@ -1,3 +1,7 @@
 - link:
-    ~/.vimrc: vimrc
+    ~/.bash_rc: bash_rc
     ~/.bash_profile: bash_profile
+    ~/.bash_prompt: bash_prompt
+    ~/.exports: exports
+    ~/.path: path
+    ~/.vimrc: vimrc
