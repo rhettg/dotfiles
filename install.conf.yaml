@@ -1,5 +1,7 @@
 - link:
-    ~/.bashrc: bashrc
+    ~/.bashrc:
+        force: true
+        path: bashrc
     ~/.bash_profile: bash_profile
     ~/.bash_prompt: bash_prompt
     ~/.exports: exports
