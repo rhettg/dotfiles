@@ -5,5 +5,3 @@ unset GITHUB_TOKEN
 gh auth logout
 gh auth login
 
-DEV_USER=$(whoami)"
-
