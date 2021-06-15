@@ -1,0 +1,26 @@
+#/bin/bash
+set -e
+
+if [ -z $CODESPACE_NAME]; then
+  echo "not a codespace"
+  exit 1
+fi
+
+# Setup SSH keys (if not already done by e.g. dotfiles)
+if [ -z "$(cat /root/.ssh/authorized_keys 2>/dev/null)" ]; then
+  echo "Downloading SSH keys..."
+  CODESPACE_NAME="$(jq .CODESPACE_NAME /workspaces/.codespaces/shared/environment-variables.json -r)"
+  # TODO: can we get/set this a better way?
+  GITHUB_USERNAME="$(echo $CODESPACE_NAME | sed 's/-github-github-.*//')"
+  curl --silent --fail "https://github.com/${GITHUB_USERNAME}.keys" > /root/.ssh/authorized_keys
+fi
+
+# Setup ssh rc to run keep-alive command if not added by dotfiles
+if [ -z "$(cat /root/.ssh/rc 2>/dev/null)" ]; then
+  mkdir -p /root/.ssh/
+  cp $(pwd)/.devcontainer/sshrc /root/.ssh/rc
+fi
+
+# Setup ssh environment
+cat /workspaces/.codespaces/shared/.user-secrets.json | jq -r '.[] | select (.type=="EnvironmentVariable") | .name+"="+.value' > $HOME/.ssh/environment
+echo "PATH=/usr/local/go/bin:$PATH" >> $HOME/.ssh/environment
