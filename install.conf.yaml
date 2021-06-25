@@ -5,5 +5,8 @@
     ~/.bash_profile: bash_profile
     ~/.bash_prompt: bash_prompt
     ~/.exports: exports
+    ~/.aliases: aliases
     ~/.path: path
     ~/.vimrc: vimrc
+- shell:
+    - [touch ~/.hushlogin]

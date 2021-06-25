@@ -1,6 +1,17 @@
 export EDITOR="vim"
 set -o vi
+export HISTSIZE=1000
+
+export CLICOLOR=1
+if [[ $LC_TERMINAL -eq "iTerm2" ]]; then
+    export TERM=xterm-256color
+fi
 
 # Something else from codespaces. What is nvs?
 export NVS_HOME="$HOME/.nvs"
 [ -s "$NVS_HOME/nvs.sh" ] && . "$NVS_HOME/nvs.sh"
+
+# OSX is so excited about zsh
+export BASH_SILENCE_DEPRECATION_WARNING=1
+
+export ACK_PAGER="less -g"
