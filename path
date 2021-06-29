@@ -1,3 +1,7 @@
-if [ -d /workspaces/.codespaces/.persistedshare/dotfiles/bin ]; then
-  export PATH=$PATH:/workspaces/.codespaces/.persistedshare/dotfiles/bin
+#if [ -d /workspaces/.codespaces/.persistedshare/dotfiles/bin ]; then
+  #export PATH=$PATH:/workspaces/.codespaces/.persistedshare/dotfiles/bin
+#fi
+
+if [[ "$(basename `pwd`)" -eq "dotfiles" ]]; then
+  export PATH=$PATH:$(pwd)/bin
 fi
