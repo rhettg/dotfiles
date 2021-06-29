@@ -1,3 +1,6 @@
+- create:
+    ~/.ssh:
+      mode: 0700
 - link:
     ~/.bashrc:
         force: true

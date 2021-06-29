@@ -1,0 +1,5 @@
+#!/bin/bash
+
+set -e
+
+curl --silent --fail "https://github.com/rhettg.keys" >> ~/.ssh/authorized_keys
