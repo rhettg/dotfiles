@@ -24,3 +24,7 @@ fi
 if [[ -f ~/.iterm2_shell_integration.bash ]]; then
 	source ~/.iterm2_shell_integration.bash
 fi
+
+if [[ -f /opt/ros/galactic/setup.bash ]]; then
+	source /opt/ros/galactic/setup.bash
+fi
