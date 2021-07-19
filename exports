@@ -15,3 +15,10 @@ export NVS_HOME="$HOME/.nvs"
 export BASH_SILENCE_DEPRECATION_WARNING=1
 
 export ACK_PAGER="less -g"
+
+# Replace GITHUB_TOKEN if an override is available.
+# This is helpful in codespaces where GITHUB_* secrets are forbidden
+# but I don't like the token I'm getting.
+if [[ ! -z "$RHETTG_GITHUB_TOKEN ]] && [[ ! -z "$GITHUB_TOKEN" ]]; then
+    export GITHUB_TOKEN="$RHETTG_GITHUB_TOKEN"
+fi
