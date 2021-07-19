@@ -1,10 +1,12 @@
 #/bin/bash
 set -e
 
-if [ -z $CODESPACE_NAME]; then
+if [ ! -d /workspaces/.codespaces/shared ]; then
   echo "not a codespace"
   exit 1
 fi
+
+mkdir -p /root/.ssh/
 
 # Setup SSH keys (if not already done by e.g. dotfiles)
 if [ -z "$(cat /root/.ssh/authorized_keys 2>/dev/null)" ]; then
@@ -17,7 +19,6 @@ fi
 
 # Setup ssh rc to run keep-alive command if not added by dotfiles
 if [ -z "$(cat /root/.ssh/rc 2>/dev/null)" ]; then
-  mkdir -p /root/.ssh/
   cp $(pwd)/.devcontainer/sshrc /root/.ssh/rc
 fi
 
