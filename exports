@@ -22,3 +22,5 @@ export ACK_PAGER="less -g"
 if [[ ! -z "$RHETTG_GITHUB_TOKEN" ]] && [[ ! -z "$GITHUB_TOKEN" ]]; then
     export GITHUB_TOKEN="$RHETTG_GITHUB_TOKEN"
 fi
+
+export GOPRIVATE="https://github.com/github/"
