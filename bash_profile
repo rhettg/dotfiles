@@ -28,3 +28,9 @@ fi
 if [[ -f /opt/ros/galactic/setup.bash ]]; then
 	source /opt/ros/galactic/setup.bash
 fi
+
+if type dircolors &>/dev/null; then
+        export LS_OPTIONS='--color=auto'
+        eval "$(dircolors -b)"
+        alias ls='ls $LS_OPTIONS'
+fi
