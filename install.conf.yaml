@@ -11,5 +11,6 @@
     ~/.aliases: aliases
     ~/.path: path
     ~/.vimrc: vimrc
+    ~/.dircolors: dircolors
 - shell:
     - [touch ~/.hushlogin]

@@ -35,6 +35,10 @@ fi
 
 if type dircolors &>/dev/null; then
         export LS_OPTIONS='--color=auto'
-        eval "$(dircolors -b)"
+        if [[ -f ~/.dircolors ]]; then
+          eval "$(dircolors -b ~/.dircolors)"
+        else
+          eval "$(dircolors -b)"
+        fi
         alias ls='ls $LS_OPTIONS'
 fi
