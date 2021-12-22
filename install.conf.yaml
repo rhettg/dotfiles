@@ -12,5 +12,6 @@
     ~/.path: path
     ~/.vimrc: vimrc
     ~/.dircolors: dircolors
+    ~/.gitconfig: gitconfig
 - shell:
     - [touch ~/.hushlogin]
