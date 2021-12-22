@@ -19,6 +19,10 @@ if type brew &>/dev/null; then
       [[ -r "$COMPLETION" ]] && source "$COMPLETION"
     done
   fi
+else
+  if [[ -f /etc/profile.d/bash_completion.sh ]]; then
+    source /etc/profile.d/bash_completion.sh
+  fi
 fi
 
 if [[ -f ~/.iterm2_shell_integration.bash ]]; then
