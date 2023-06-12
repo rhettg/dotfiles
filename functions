@@ -1,0 +1,20 @@
+# Docker Volume Functions
+# dvc - docker volume connect
+dvc() {
+  if ! docker volume inspect $1 > /dev/null; then
+    return 1
+  fi
+
+  docker run --rm -it -v $1:/$1 -v .:/mnt -w /$1 ubuntu /bin/bash 
+}
+
+# dvls - docker volume ls
+dvls() {
+  v="$1"
+  shift
+  if ! docker volume inspect $v > /dev/null; then
+    return 1
+  fi
+
+  docker run --rm -it -v $v:/$v -v .:/mnt -w /$v ubuntu /bin/bash -c "ls -lah $@"
+}
