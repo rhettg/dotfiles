@@ -42,3 +42,5 @@ if type dircolors &>/dev/null; then
         fi
         alias ls='ls $LS_OPTIONS'
 fi
+
+. "$HOME/.cargo/env"
