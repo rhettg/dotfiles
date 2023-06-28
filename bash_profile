@@ -43,4 +43,8 @@ if type dircolors &>/dev/null; then
         alias ls='ls $LS_OPTIONS'
 fi
 
+if command -v ngrok &>/dev/null; then
+        eval "$(ngrok completion)"
+fi
+
 . "$HOME/.cargo/env"
