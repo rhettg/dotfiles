@@ -47,4 +47,8 @@ if command -v ngrok &>/dev/null; then
         eval "$(ngrok completion)"
 fi
 
+if command -v rbenv &>/dev/null; then
+        eval "$(rbenv init -)"
+fi
+
 . "$HOME/.cargo/env"
