@@ -2,3 +2,7 @@ alias ll="ls -laG"
 alias cdp="cd ~/Projects"
 alias grep="grep --color=always"
 alias glm="git log --merges --first-parent"
+
+if [ -d /Applications/Tailscale.app ]; then
+    alias tailscale="/Applications/Tailscale.app/Contents/MacOS/Tailscale"
+fi
