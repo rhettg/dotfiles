@@ -51,4 +51,6 @@ if command -v rbenv &>/dev/null; then
         eval "$(rbenv init -)"
 fi
 
-. "$HOME/.cargo/env"
+if [ -f "$HOME/.cargo/env" ]; then
+  . "$HOME/.cargo/env"
+fi
