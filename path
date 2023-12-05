@@ -6,6 +6,10 @@ if [ -d /usr/local/go ]; then
   export PATH=$PATH:/usr/local/go/bin
 fi
 
+if [ -d /Users/rhettg/go/bin ]; then
+  export PATH=$PATH:/Users/rhettg/go/bin
+fi
+
 if [[ "$(basename `pwd`)" -eq "dotfiles" ]]; then
   export PATH=$PATH:$(pwd)/bin
 fi
