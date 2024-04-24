@@ -2,3 +2,6 @@
 	default = simple
 [pull]
 	ff = only
+[user]
+	email = rhettg@gmail.com
+	name = Rhett Garber
