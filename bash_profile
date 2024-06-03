@@ -51,9 +51,7 @@ if command -v rbenv &>/dev/null; then
         eval "$(rbenv init -)"
 fi
 
-if [ -f "$HOME/.cargo/env" ]; then
-  . "$HOME/.cargo/env"
-fi
+[[ -d "$HOME/.cargo" ]] && . "$HOME/.cargo/env"
 
 export PYENV_ROOT="$HOME/.pyenv"
 [[ -d $PYENV_ROOT/bin ]] && export PATH="$PYENV_ROOT/bin:$PATH"
