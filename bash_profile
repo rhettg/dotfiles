@@ -59,3 +59,9 @@ if command -v pyenv 1>/dev/null 2>&1; then
   eval "$(pyenv init -)"
   eval "$(pyenv virtualenv-init -)"
 fi
+
+if [[ -S "/Users/rhettg/Library/Group Containers/2BUA8C4S2C.com.1password/t/agent.sock" ]]; then
+  export SSH_AUTH_SOCK="/Users/rhettg/Library/Group Containers/2BUA8C4S2C.com.1password/t/agent.sock"
+else
+  echo "no file"
+fi
