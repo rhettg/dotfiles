@@ -5,3 +5,5 @@
 [user]
 	email = rhettg@gmail.com
 	name = Rhett Garber
+[init]
+	defaultBranch = main

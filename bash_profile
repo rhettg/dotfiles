@@ -65,3 +65,7 @@ if [[ -S "/Users/rhettg/Library/Group Containers/2BUA8C4S2C.com.1password/t/agen
 else
   echo "no file"
 fi
+
+export NVM_DIR="$HOME/.nvm"
+[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+[ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"
