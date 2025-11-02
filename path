@@ -13,3 +13,7 @@ fi
 if [[ "$(basename `pwd`)" -eq "dotfiles" ]]; then
   export PATH=$PATH:$(pwd)/bin
 fi
+
+if [ -d ~/.local ]; then
+  export PATH=$PATH:~/.local/bin
+fi
