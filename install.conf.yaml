@@ -1,7 +1,10 @@
 - create:
+    ~/.local/bin:
     ~/.ssh:
       mode: 0700
 - link:
+    ~/.agent-skills: .agent-skills
+    ~/.local/bin/agent-skills: bin/agent-skills
     ~/.bashrc:
         force: true
         path: bashrc

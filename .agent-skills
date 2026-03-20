@@ -1,0 +1,18 @@
+# Shared agent skills.
+#
+# Format:
+#   github.com/OWNER/REPO//PATH@REV
+#
+# Notes:
+# - PATH is optional. If omitted, the repo root must contain SKILL.md.
+# - REV should be a reviewed commit SHA or immutable tag.
+# - Each skill is symlinked into ~/.agent/skills, ~/.agents/skills,
+#   ~/.codex/skills, ~/.claude/skills, and ~/.copilot/skills.
+#
+# Examples:
+# github.com/openai/skills//openai-docs@<commit>
+
+github.com/openai/skills//skills/.curated/playwright@dc48aff8208131776c9937326002bd60cf572ab6
+github.com/openai/skills//skills/.curated/openai-docs@dc48aff8208131776c9937326002bd60cf572ab6
+github.com/TheGreatGildo/nerv-ui@c2c890b023e7d7b6d9498b67b82ffb3a3c92340f
+github.com/nicobailon/visual-explainer//plugins/visual-explainer@61f06e818e8fd49a86351d5981dcc6eeeae2f890

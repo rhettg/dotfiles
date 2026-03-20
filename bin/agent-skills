@@ -1,0 +1,493 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "${SELF_DIR}/.." && pwd)"
+MANIFEST="${AGENT_SKILLS_MANIFEST:-${HOME}/.agent-skills}"
+
+CACHE_ROOT="${AGENT_SKILLS_CACHE:-${HOME}/.local/share/agent-skills}"
+REPO_CACHE_DIR="${CACHE_ROOT}/repos"
+CHECKOUT_DIR="${CACHE_ROOT}/checkouts"
+
+TARGET_ROOTS=(
+  "${HOME}/.agent/skills"
+  "${HOME}/.agents/skills"
+  "${HOME}/.codex/skills"
+  "${HOME}/.claude/skills"
+  "${HOME}/.copilot/skills"
+)
+
+declare -a SYNCED_SKILL_NAMES=()
+
+usage() {
+  cat <<'EOF'
+Usage:
+  agent-skills add [--no-sync] <github-url-or-spec>
+  agent-skills sync
+  agent-skills status
+  agent-skills help
+
+Manifest format:
+  github.com/OWNER/REPO//PATH@REV
+
+Examples:
+  github.com/openai/skills//openai-docs@8f3c4d1
+  github.com/acme/skills//terraform-review@v0.4.2
+EOF
+}
+
+trim() {
+  local value="$1"
+  value="${value#"${value%%[![:space:]]*}"}"
+  value="${value%"${value##*[![:space:]]}"}"
+  printf '%s' "$value"
+}
+
+parse_entry() {
+  local entry="$1"
+
+  if [[ ! "$entry" =~ ^github\.com/([^/]+)/([^/@]+)(//([^@]+))?@(.+)$ ]]; then
+    echo "invalid manifest entry: ${entry}" >&2
+    return 1
+  fi
+
+  ENTRY_OWNER="${BASH_REMATCH[1]}"
+  ENTRY_REPO="${BASH_REMATCH[2]}"
+  ENTRY_PATH="${BASH_REMATCH[4]}"
+  ENTRY_REV="${BASH_REMATCH[5]}"
+  ENTRY_REPO_URL="https://github.com/${ENTRY_OWNER}/${ENTRY_REPO}.git"
+  ENTRY_REPO_KEY="${ENTRY_OWNER}__${ENTRY_REPO}"
+  ENTRY_REPO_CACHE="${REPO_CACHE_DIR}/${ENTRY_REPO_KEY}"
+
+  if [[ -n "${ENTRY_PATH}" ]]; then
+    ENTRY_NAME="$(basename "${ENTRY_PATH}")"
+  else
+    ENTRY_NAME="${ENTRY_REPO}"
+  fi
+}
+
+parse_github_location() {
+  local input="$1"
+  local normalized="$1"
+  local remainder
+
+  ADD_OWNER=""
+  ADD_REPO=""
+  ADD_PATH=""
+  ADD_REF_HINT=""
+  ADD_MODE=""
+  ADD_REMAINDER=""
+
+  normalized="${normalized#https://}"
+  normalized="${normalized#http://}"
+  normalized="${normalized#git@}"
+  normalized="${normalized#ssh://git@}"
+  normalized="${normalized%.git}"
+  normalized="${normalized#github.com:}"
+
+  if [[ "${normalized}" != github.com/* ]]; then
+    echo "unsupported source: ${input}" >&2
+    return 1
+  fi
+
+  remainder="${normalized#github.com/}"
+  if [[ ! "${remainder}" =~ ^([^/]+)/([^/]+)(/(tree|blob)/(.+))?$ ]]; then
+    echo "unsupported github source: ${input}" >&2
+    return 1
+  fi
+
+  ADD_OWNER="${BASH_REMATCH[1]}"
+  ADD_REPO="${BASH_REMATCH[2]}"
+  ADD_MODE="${BASH_REMATCH[4]:-}"
+  ADD_REMAINDER="${BASH_REMATCH[5]:-}"
+
+  return 0
+}
+
+parse_ref_and_path() {
+  local remainder="$1"
+  local mode="$2"
+  local candidate_ref
+  local candidate_path
+  local resolved
+
+  mapfile -t ADD_REFS < <(
+    git -C "${ENTRY_REPO_CACHE}" for-each-ref --format='%(refname:short)' refs/heads refs/remotes/origin refs/tags \
+      | sed 's#^origin/##' \
+      | awk '!seen[$0]++ { print length($0) " " $0 }' \
+      | sort -nr \
+      | cut -d' ' -f2-
+  )
+
+  for candidate_ref in "${ADD_REFS[@]}"; do
+    [[ -z "${candidate_ref}" ]] && continue
+    if [[ "${remainder}" == "${candidate_ref}" ]]; then
+      candidate_path=""
+    elif [[ "${remainder}" == "${candidate_ref}/"* ]]; then
+      candidate_path="${remainder#${candidate_ref}/}"
+    else
+      continue
+    fi
+
+    if [[ "${mode}" == "blob" ]]; then
+      [[ "${candidate_path}" == */SKILL.md ]] || continue
+      candidate_path="${candidate_path%/SKILL.md}"
+    fi
+
+    resolved="$(git -C "${ENTRY_REPO_CACHE}" rev-parse --verify "${candidate_ref}^{commit}" 2>/dev/null || true)"
+    [[ -n "${resolved}" ]] || continue
+
+    ADD_REF_HINT="${candidate_ref}"
+    ADD_PATH="${candidate_path}"
+    return 0
+  done
+
+  echo "unable to resolve ref/path from GitHub URL suffix: ${remainder}" >&2
+  return 1
+}
+
+resolve_add_spec() {
+  local input="$1"
+  local explicit_path=""
+  local explicit_rev=""
+
+  if [[ "${input}" =~ ^github\.com/([^/]+)/([^/@]+)(//([^@]+))?(@(.+))?$ ]]; then
+    ADD_OWNER="${BASH_REMATCH[1]}"
+    ADD_REPO="${BASH_REMATCH[2]}"
+    explicit_path="${BASH_REMATCH[4]:-}"
+    explicit_rev="${BASH_REMATCH[6]:-}"
+    ADD_PATH="${explicit_path}"
+    ADD_REF_HINT="${explicit_rev}"
+  else
+    parse_github_location "${input}"
+  fi
+
+  ENTRY_OWNER="${ADD_OWNER}"
+  ENTRY_REPO="${ADD_REPO}"
+  ENTRY_PATH="${ADD_PATH}"
+  ENTRY_REV="${ADD_REF_HINT:-HEAD}"
+  ENTRY_REPO_URL="https://github.com/${ENTRY_OWNER}/${ENTRY_REPO}.git"
+  ENTRY_REPO_KEY="${ENTRY_OWNER}__${ENTRY_REPO}"
+  ENTRY_REPO_CACHE="${REPO_CACHE_DIR}/${ENTRY_REPO_KEY}"
+
+  if [[ -n "${ENTRY_PATH}" ]]; then
+    ENTRY_NAME="$(basename "${ENTRY_PATH}")"
+  else
+    ENTRY_NAME="${ENTRY_REPO}"
+  fi
+}
+
+manifest_entries() {
+  if [[ ! -f "${MANIFEST}" ]]; then
+    echo "manifest not found: ${MANIFEST}" >&2
+    return 1
+  fi
+
+  while IFS= read -r raw_line || [[ -n "${raw_line}" ]]; do
+    local line
+    line="${raw_line%%#*}"
+    line="$(trim "${line}")"
+    [[ -z "${line}" ]] && continue
+    printf '%s\n' "${line}"
+  done < "${MANIFEST}"
+}
+
+ensure_repo_cache() {
+  mkdir -p "${REPO_CACHE_DIR}"
+
+  if [[ ! -d "${ENTRY_REPO_CACHE}/.git" ]]; then
+    git clone --filter=blob:none "${ENTRY_REPO_URL}" "${ENTRY_REPO_CACHE}" >/dev/null
+  else
+    if git -C "${ENTRY_REPO_CACHE}" remote get-url origin >/dev/null 2>&1; then
+      git -C "${ENTRY_REPO_CACHE}" fetch --tags --prune origin >/dev/null
+    fi
+  fi
+}
+
+resolve_rev() {
+  git -C "${ENTRY_REPO_CACHE}" rev-parse --verify "${ENTRY_REV}^{commit}"
+}
+
+ensure_checkout() {
+  local resolved_rev="$1"
+  local checkout_root="${CHECKOUT_DIR}/${ENTRY_REPO_KEY}/${resolved_rev}"
+  local tmpdir
+
+  if [[ ! -d "${checkout_root}" ]]; then
+    mkdir -p "${CHECKOUT_DIR}/${ENTRY_REPO_KEY}"
+    tmpdir="$(mktemp -d "${CHECKOUT_DIR}/${ENTRY_REPO_KEY}/tmp.XXXXXX")"
+    git -C "${ENTRY_REPO_CACHE}" archive "${resolved_rev}" | tar -x -C "${tmpdir}"
+    mv "${tmpdir}" "${checkout_root}"
+  fi
+
+  if [[ -n "${ENTRY_PATH}" ]]; then
+    ENTRY_CHECKOUT_PATH="${checkout_root}/${ENTRY_PATH}"
+  else
+    ENTRY_CHECKOUT_PATH="${checkout_root}"
+  fi
+
+  if [[ ! -f "${ENTRY_CHECKOUT_PATH}/SKILL.md" ]]; then
+    echo "missing SKILL.md for ${ENTRY_NAME} at ${ENTRY_CHECKOUT_PATH}" >&2
+    return 1
+  fi
+}
+
+sync_link() {
+  local source_dir="$1"
+  local target_root="$2"
+  local target_path="${target_root}/${ENTRY_NAME}"
+
+  mkdir -p "${target_root}"
+
+  if [[ -L "${target_path}" ]]; then
+    rm "${target_path}"
+  elif [[ -e "${target_path}" ]]; then
+    echo "refusing to replace non-symlink: ${target_path}" >&2
+    return 1
+  fi
+
+  ln -s "${source_dir}" "${target_path}"
+}
+
+cleanup_removed_links() {
+  local target_root
+  local target_path
+  local skill_name
+  local keep
+  local current_target
+
+  for target_root in "${TARGET_ROOTS[@]}"; do
+    [[ -d "${target_root}" ]] || continue
+
+    for target_path in "${target_root}"/*; do
+      [[ -L "${target_path}" ]] || continue
+      current_target="$(readlink "${target_path}")"
+      [[ "${current_target}" == "${CHECKOUT_DIR}"/* ]] || continue
+      skill_name="$(basename "${target_path}")"
+      keep="0"
+
+      for managed_name in "${SYNCED_SKILL_NAMES[@]}"; do
+        if [[ "${managed_name}" == "${skill_name}" ]]; then
+          keep="1"
+          break
+        fi
+      done
+
+      if [[ "${keep}" == "0" ]]; then
+        rm "${target_path}"
+        printf 'removed %-23s %s\n' "${skill_name}" "${target_root}"
+      fi
+    done
+  done
+}
+
+cmd_sync() {
+  local entry
+  local resolved_rev
+
+  mkdir -p "${CHECKOUT_DIR}"
+  SYNCED_SKILL_NAMES=()
+
+  while IFS= read -r entry; do
+    parse_entry "${entry}"
+    ensure_repo_cache
+    resolved_rev="$(resolve_rev)"
+    ensure_checkout "${resolved_rev}"
+    SYNCED_SKILL_NAMES+=("${ENTRY_NAME}")
+
+    for target_root in "${TARGET_ROOTS[@]}"; do
+      sync_link "${ENTRY_CHECKOUT_PATH}" "${target_root}"
+    done
+
+    printf 'synced %-24s %s\n' "${ENTRY_NAME}" "${resolved_rev}"
+  done < <(manifest_entries)
+
+  cleanup_removed_links
+}
+
+manifest_contains() {
+  local needle="$1"
+
+  if [[ ! -f "${MANIFEST}" ]]; then
+    return 1
+  fi
+
+  grep -Fqx "${needle}" "${MANIFEST}"
+}
+
+cmd_add() {
+  local sync_after_add="1"
+  local input=""
+  local resolved_rev
+  local canonical
+
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --no-sync)
+        sync_after_add="0"
+        shift
+        ;;
+      --help|-h)
+        echo "usage: agent-skills add [--no-sync] <github-url-or-spec>" >&2
+        return 0
+        ;;
+      -*)
+        echo "unknown add flag: $1" >&2
+        return 1
+        ;;
+      *)
+        if [[ -n "${input}" ]]; then
+          echo "usage: agent-skills add [--no-sync] <github-url-or-spec>" >&2
+          return 1
+        fi
+        input="$1"
+        shift
+        ;;
+    esac
+  done
+
+  if [[ -z "${input}" ]]; then
+    echo "usage: agent-skills add [--no-sync] <github-url-or-spec>" >&2
+    return 1
+  fi
+
+  mkdir -p "${REPO_CACHE_DIR}"
+
+  resolve_add_spec "${input}"
+  ensure_repo_cache
+
+  if [[ -n "${ADD_MODE:-}" ]]; then
+    parse_ref_and_path "${ADD_REMAINDER}" "${ADD_MODE}"
+    ENTRY_PATH="${ADD_PATH}"
+    ENTRY_REV="${ADD_REF_HINT}"
+    if [[ -n "${ENTRY_PATH}" ]]; then
+      ENTRY_NAME="$(basename "${ENTRY_PATH}")"
+    else
+      ENTRY_NAME="${ENTRY_REPO}"
+    fi
+  fi
+
+  if [[ -n "${ENTRY_REV}" && "${ENTRY_REV}" != "HEAD" ]]; then
+    resolved_rev="$(git -C "${ENTRY_REPO_CACHE}" rev-parse --verify "${ENTRY_REV}^{commit}" 2>/dev/null || true)"
+  else
+    resolved_rev="$(git -C "${ENTRY_REPO_CACHE}" rev-parse --verify "origin/HEAD^{commit}" 2>/dev/null || true)"
+    if [[ -z "${resolved_rev}" ]]; then
+      resolved_rev="$(git -C "${ENTRY_REPO_CACHE}" rev-parse --verify "HEAD^{commit}")"
+    fi
+  fi
+
+  if [[ -z "${resolved_rev}" ]]; then
+    echo "unable to resolve revision for ${input}" >&2
+    return 1
+  fi
+
+  ENTRY_REV="${resolved_rev}"
+  canonical="github.com/${ENTRY_OWNER}/${ENTRY_REPO}"
+  if [[ -n "${ENTRY_PATH}" ]]; then
+    canonical="${canonical}//${ENTRY_PATH}"
+  fi
+  canonical="${canonical}@${ENTRY_REV}"
+
+  ensure_checkout "${resolved_rev}" >/dev/null
+
+  touch "${MANIFEST}"
+  if manifest_contains "${canonical}"; then
+    printf 'already present: %s\n' "${canonical}"
+  else
+    printf '%s\n' "${canonical}" >> "${MANIFEST}"
+    printf 'added %s\n' "${canonical}"
+  fi
+
+  if [[ "${sync_after_add}" == "1" ]]; then
+    printf 'syncing %s\n' "${ENTRY_NAME}"
+    for target_root in "${TARGET_ROOTS[@]}"; do
+      sync_link "${ENTRY_CHECKOUT_PATH}" "${target_root}"
+    done
+  fi
+}
+
+status_link() {
+  local target_root="$1"
+  local target_path="${target_root}/${ENTRY_NAME}"
+
+  if [[ -L "${target_path}" ]]; then
+    local current_target
+    current_target="$(readlink "${target_path}")"
+    if [[ "${current_target}" == "${ENTRY_CHECKOUT_PATH}" ]]; then
+      printf 'ok'
+    else
+      printf 'mismatch -> %s' "${current_target}"
+    fi
+  elif [[ -e "${target_path}" ]]; then
+    printf 'present (not symlink)'
+  else
+    printf 'missing'
+  fi
+}
+
+cmd_status() {
+  local entry
+  local resolved_rev
+  local label
+
+  while IFS= read -r entry; do
+    parse_entry "${entry}"
+
+    if [[ -d "${ENTRY_REPO_CACHE}/.git" ]]; then
+      resolved_rev="$(resolve_rev 2>/dev/null || true)"
+    else
+      resolved_rev=""
+    fi
+
+    if [[ -n "${resolved_rev}" ]]; then
+      ensure_checkout "${resolved_rev}" >/dev/null 2>&1 || true
+    fi
+
+    if [[ -n "${resolved_rev:-}" && -n "${ENTRY_CHECKOUT_PATH:-}" ]]; then
+      label="${resolved_rev}"
+    else
+      label="not fetched"
+      ENTRY_CHECKOUT_PATH=""
+    fi
+
+    printf '%s @ %s\n' "${ENTRY_NAME}" "${ENTRY_REV}"
+    printf '  repo:    %s\n' "${ENTRY_REPO_URL}"
+    if [[ -n "${ENTRY_PATH}" ]]; then
+      printf '  path:    %s\n' "${ENTRY_PATH}"
+    fi
+    printf '  cache:   %s\n' "${label}"
+
+    for target_root in "${TARGET_ROOTS[@]}"; do
+      printf '  target:  %s -> %s\n' "${target_root}" "$(status_link "${target_root}")"
+    done
+    printf '\n'
+  done < <(manifest_entries)
+}
+
+main() {
+  local cmd="${1:-help}"
+
+  case "${cmd}" in
+    add)
+      shift
+      cmd_add "$@"
+      ;;
+    sync)
+      cmd_sync
+      ;;
+    status)
+      cmd_status
+      ;;
+    help|-h|--help)
+      usage
+      ;;
+    *)
+      echo "unknown command: ${cmd}" >&2
+      usage >&2
+      exit 1
+      ;;
+  esac
+}
+
+main "$@"
