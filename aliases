@@ -3,6 +3,8 @@ alias cdp="cd ~/Projects"
 alias grep="grep --color=always"
 alias glm="git log --merges --first-parent"
 alias askills="agent-skills"
+alias codexd="codex --dangerously-bypass-approvals-and-sandbox"
+alias codexa="codex --full-auto"
 
 if [ -d /Applications/Tailscale.app ]; then
     alias tailscale="/Applications/Tailscale.app/Contents/MacOS/Tailscale"
